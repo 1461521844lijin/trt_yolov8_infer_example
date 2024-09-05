@@ -10,6 +10,8 @@ Enmuxer::Enmuxer(std::shared_ptr<Encoder> encoder, std::string out_url) {
         m_format_name = "flv";
     } else if (out_url.find("rtmp") != std::string::npos) {
         m_format_name = "flv";
+    } else if (out_url.find("rtsp") != std::string::npos) {
+        m_format_name = "rtsp";
     } else if (out_url.find("jpg") != std::string::npos) {
         m_format_name = "image2";
     } else {
@@ -27,8 +29,18 @@ bool Enmuxer::open() {
     avformat_new_stream(m_format_ctx, m_encoder->get_codec_ctx()->codec);
     ASSERT_FFMPEG(avcodec_parameters_from_context(get_video_stream()->codecpar,
                                                   m_encoder->get_codec_ctx().get()));
-    ASSERT_FFMPEG(avio_open(&m_format_ctx->pb, m_out_url.c_str(), AVIO_FLAG_WRITE));
-    ASSERT_FFMPEG(avformat_write_header(m_format_ctx, nullptr));
+    if (m_format_name == "rtsp") {
+        // 为RTSP设置一些特定的选项
+        AVDictionary *options = nullptr;
+        av_dict_set(&options, "rtsp_transport", "tcp", 0);  // 使用TCP传输方式
+        // 使用avformat_write_header来打开RTSP连接
+        ASSERT_FFMPEG(avformat_write_header(m_format_ctx, &options));
+        av_dict_free(&options);  // 释放选项字典
+    } else {
+        // 非RTSP流的处理，依然使用avio_open
+        ASSERT_FFMPEG(avio_open(&m_format_ctx->pb, m_out_url.c_str(), AVIO_FLAG_WRITE));
+        ASSERT_FFMPEG(avformat_write_header(m_format_ctx, nullptr));
+    }
     return true;
 }
 
